@@ -1,0 +1,208 @@
+import classNames from 'classnames';
+import defaultDebounce from 'lodash.debounce';
+import React from 'react';
+import { connect } from 'react-redux';
+import Textarea from 'react-textarea-autosize';
+import { compose } from 'redux';
+
+import { withErrorHandler } from 'core/errorHandler';
+import translate from 'core/i18n/translate';
+import { sendAddonAbuseReport } from 'core/reducers/abuse';
+import { sanitizeHTML } from 'core/utils';
+import Button from 'ui/components/Button';
+
+import './styles.scss';
+
+
+type PropTypes = {
+  abuseReport: {| message: string, reporter: Object | null |},
+  addon: Object | null,
+  debounce: any,
+  dispatch: any,
+  errorHandler: any,
+  loading: bool,
+  i18n: Object,
+};
+
+export class ReportAbuseButtonBase extends React.Component {
+  static defaultProps = {
+    debounce: defaultDebounce,
+  };
+
+  constructor(props: Object) {
+    super(props);
+
+    this.state = { buttonEnabled: false, expanded: false };
+  }
+
+  cancelReport = (event) => {
+    event.preventDefault();
+
+    if (this.props.loading) {
+      return;
+    }
+
+    this.setState({ expanded: false });
+  }
+
+  sendReport = (event) => {
+    event.preventDefault();
+
+    // The button isn't clickable if there is no content, but because we
+    // debounce the checks we just verify there's a message to send.
+    if (!this.textarea.value.length) {
+      return;
+    }
+
+    const { addon, dispatch, errorHandler } = this.props;
+
+    dispatch(sendAddonAbuseReport({
+      addonSlug: addon.slug,
+      errorHandlerId: errorHandler.id,
+      message: this.textarea.value,
+    }));
+  }
+
+  showMore = (event) => {
+    event.preventDefault();
+
+    this.setState({ expanded: true }, function focusTextarea() {
+      this.textarea.focus();
+    });
+  }
+
+  textareaChange = this.props.debounce(() => {
+    if (this.textarea.value.length) {
+      this.setState({ buttonEnabled: true });
+    } else {
+      this.setState({ buttonEnabled: false });
+    }
+  }, 100, { trailing: true })
+
+  props: PropTypes;
+
+  render() {
+    const { abuseReport, addon, i18n, loading } = this.props;
+
+    if (!addon) {
+      return null;
+    }
+
+    if (abuseReport) {
+      return (
+        <div className="ReportAbuseButton ReportAbuseButton--report-sent">
+          <h3 className="ReportAbuseButton-header">
+            {i18n.gettext('You reported this add-on for abuse')}
+          </h3>
+
+          <p className="ReportAbuseButton-first-paragraph">
+            {i18n.gettext(
+              `We have received your report. Thanks for letting us know about
+              your concerns with this add-on.`
+            )}
+          </p>
+
+          <p>
+            {i18n.gettext(
+              `We can't respond to every abuse report but we'll look into
+              this issue.`
+            )}
+          </p>
+        </div>
+      );
+    }
+
+    const sendButtonIsDisabled = loading || !this.state.buttonEnabled;
+
+    const prefaceText = i18n.sprintf(i18n.gettext(
+      `If you think this add-on violates
+      %(linkTagStart)sMozilla's add-on policies%(linkTagEnd)s or has
+      security or privacy issues, please report these issues to Mozilla using
+      this form.`
+    ), {
+      linkTagStart: '<a href="https://developer.mozilla.org/en-US/Add-ons/AMO/Policy">',
+      linkTagEnd: '</a>',
+    });
+
+    /* eslint-disable react/no-danger */
+    return (
+      <div
+        className={classNames('ReportAbuseButton', {
+          'ReportAbuseButton--is-expanded': this.state.expanded,
+        })}
+      >
+        <div className="ReportAbuseButton--preview">
+          <Button
+            className="ReportAbuseButton-show-more Button--report"
+            onClick={this.showMore}
+          >
+            {i18n.gettext('Report this add-on for abuse')}
+          </Button>
+        </div>
+
+        <div className="ReportAbuseButton--expanded">
+          <h3 className="ReportAbuseButton-header">
+            {i18n.gettext('Report this add-on for abuse')}
+          </h3>
+
+          <p
+            className="ReportAbuseButton-first-paragraph"
+            dangerouslySetInnerHTML={sanitizeHTML(prefaceText, ['a'])}
+          />
+
+          <p>{i18n.gettext(
+            `Please don't use this form to report bugs or request add-on
+            features; this report will be sent to Mozilla and not to the
+            add-on developer.`
+          )}</p>
+          <Textarea
+            className="ReportAbuseButton-textarea"
+            disabled={loading}
+            inputRef={(ref) => { this.textarea = ref; }}
+            onChange={this.textareaChange}
+            placeholder={i18n.gettext(
+              'Explain how this add-on is violating our policies.'
+            )}
+          />
+
+          <div className="ReportAbuseButton-buttons">
+            <a
+              className={classNames('ReportAbuseButton-cancel-report', {
+                'ReportAbuseButton-cancel-report--disabled': loading,
+              })}
+              href="#cancel"
+              onClick={this.cancelReport}
+            >
+              {i18n.gettext('Dismiss')}
+            </a>
+            <Button
+              className="ReportAbuseButton-send-report Button--report Button--small"
+              disabled={sendButtonIsDisabled}
+              onClick={this.sendReport}
+            >
+              {loading ?
+                i18n.gettext('Sending abuse report') :
+                i18n.gettext('Send abuse report')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+    /* eslint-enable react/no-danger */
+  }
+}
+
+export const mapStateToProps = (state, ownProps) => {
+  const addon = ownProps.addon;
+
+  return {
+    abuseReport: addon ? state.abuse.bySlug[addon.slug] : null,
+    loading: state.abuse.loading,
+  };
+};
+
+export default compose(
+  connect(mapStateToProps),
+  translate(),
+  withErrorHandler({ name: 'AddonAbuseReport' }),
+)(ReportAbuseButtonBase);

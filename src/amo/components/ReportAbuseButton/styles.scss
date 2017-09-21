@@ -1,0 +1,53 @@
+@import "~ui/css/vars";
+
+.ReportAbuseButton {
+  margin: 10px auto;
+}
+
+.ReportAbuseButton-header {
+  margin-bottom: 0;
+}
+
+.ReportAbuseButton-first-paragraph {
+  margin-top: 6px;
+}
+
+.ReportAbuseButton--preview {
+  display: block;
+
+  .ReportAbuseButton--is-expanded & {
+    display: none;
+  }
+}
+
+.ReportAbuseButton--expanded {
+  display: none;
+
+  .ReportAbuseButton--is-expanded & {
+    display: block;
+  }
+}
+
+.ReportAbuseButton-textarea {
+  font-size: $font-size-m-smaller;
+  line-height: 1.4;
+  margin: 5px auto;
+  min-height: 51px;
+  padding: 5px;
+  resize: none;
+  width: 100%;
+}
+
+.ReportAbuseButton-buttons {
+  display: flex;
+  justify-content: space-between;
+}
+
+.ReportAbuseButton-cancel-report {
+  align-self: center;
+}
+
+.ReportAbuseButton-cancel-report--disabled:link {
+  color: $neutral-base-color;
+  cursor: not-allowed;
+}

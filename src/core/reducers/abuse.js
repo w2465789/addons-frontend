@@ -58,12 +58,14 @@ export function sendAddonAbuseReport(
 
 export const initialState = {
   bySlug: {},
+  loading: false,
 };
 
 type ReducerState = {|
   bySlug: {
     [addonSlug: string]: {| message: string, reporter: Object | null |},
   },
+  loading: bool,
 |};
 
 export default function abuseReducer(
@@ -71,6 +73,8 @@ export default function abuseReducer(
   action: Object
 ) {
   switch (action.type) {
+    case SEND_ADDON_ABUSE_REPORT:
+      return { ...state, loading: true };
     case LOAD_ADDON_ABUSE_REPORT: {
       const { addon, message, reporter } = action.payload;
       return {
@@ -79,6 +83,7 @@ export default function abuseReducer(
           ...state.bySlug,
           [addon.slug]: { message, reporter },
         },
+        loading: false,
       };
     }
     default:
