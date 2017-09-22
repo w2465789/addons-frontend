@@ -1,24 +1,28 @@
 import React from 'react';
-import PropTypes from 'prop-types';
+import { connect } from 'react-redux';
 import { compose } from 'redux';
 
 import Link from 'amo/components/Link';
 import translate from 'core/i18n/translate';
-import { trimAndAddProtocolToUrl } from 'core/utils';
+import type { AddonType } from 'core/types/addons';
+import { isAddonAuthor, trimAndAddProtocolToUrl } from 'core/utils';
 import Card from 'ui/components/Card';
 import LoadingText from 'ui/components/LoadingText';
 
 import './styles.scss';
 
 
+type PropTypes = {
+  addon: AddonType | null,
+  i18n: Object,
+  userId: number | null,
+}
+
 export class AddonMoreInfoBase extends React.Component {
-  static propTypes = {
-    addon: PropTypes.object.isRequired,
-    i18n: PropTypes.object.isRequired,
-  }
+  props: PropTypes;
 
   listContent() {
-    const { addon, i18n } = this.props;
+    const { addon, i18n, userId } = this.props;
 
     if (!addon) {
       return (
@@ -146,6 +150,18 @@ export class AddonMoreInfoBase extends React.Component {
             {addon.id}
           </dd>
         ) : null}
+        {isAddonAuthor({ addon, userId }) ? (
+          <dt className="AddonMoreInfo-stats-title">
+            {i18n.gettext('Usage Statistics')}
+          </dt>
+        ) : null}
+        {isAddonAuthor({ addon, userId }) ? (
+          <dd className="AddonMoreInfo-stats-content">
+            <Link href={`/addon/${addon.slug}/statistics/`}>
+              {i18n.gettext('Visit stats dashboard')}
+            </Link>
+          </dd>
+        ) : null}
       </dl>
     );
   }
@@ -164,6 +180,13 @@ export class AddonMoreInfoBase extends React.Component {
   }
 }
 
+export const mapStateToProps = (state) => {
+  return {
+    userId: state.user ? state.user.id : null,
+  };
+};
+
 export default compose(
+  connect(mapStateToProps),
   translate(),
 )(AddonMoreInfoBase);

@@ -5,7 +5,12 @@ import React from 'react';
 import AddonMoreInfo, {
   AddonMoreInfoBase,
 } from 'amo/components/AddonMoreInfo';
-import { dispatchClientMetadata, fakeAddon } from 'tests/unit/amo/helpers';
+import Link from 'amo/components/Link';
+import {
+  dispatchSignInActions,
+  dispatchClientMetadata,
+  fakeAddon,
+} from 'tests/unit/amo/helpers';
 import { getFakeI18nInst, shallowUntilTarget } from 'tests/unit/helpers';
 import LoadingText from 'ui/components/LoadingText';
 
@@ -181,5 +186,30 @@ describe(__filename, () => {
         identifying your add-on to site administrators.`);
     expect(root.find('.AddonMoreInfo-database-id-content'))
       .toHaveText('9001');
+  });
+
+  it('links to stats if add-on author is viewing the page', () => {
+    const addon = {
+      ...fakeAddon,
+      slug: 'coolio',
+      authors: [
+        {
+          id: 11,
+          name: 'tofumatt',
+          picture_url: 'http://cdn.a.m.o/myphoto.jpg',
+          url: 'http://a.m.o/en-GB/firefox/user/tofumatt/',
+          username: 'tofumatt',
+        },
+      ],
+    };
+    const root = render({
+      addon,
+      store: dispatchSignInActions({ userId: 11 }).store,
+    });
+
+    const statsLink = root.find('.AddonMoreInfo-stats-content').find(Link);
+    expect(statsLink).toHaveLength(1);
+    expect(statsLink).toHaveProp('children', 'Visit stats dashboard');
+    expect(statsLink).toHaveProp('href', '/addon/coolio/statistics/');
   });
 });
