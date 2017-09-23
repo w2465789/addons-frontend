@@ -1,11 +1,10 @@
 import { mount } from 'enzyme';
 import React from 'react';
 
-import ReportAbuseButton, {
-  ReportAbuseButtonBase,
-  mapStateToProps,
-} from 'amo/components/ReportAbuseButton';
+import ReportAbuseButton from 'amo/components/ReportAbuseButton';
 import {
+  disableAbuseButtonUI,
+  enableAbuseButtonUI,
   loadAddonAbuseReport,
   sendAddonAbuseReport,
 } from 'core/reducers/abuse';
@@ -21,6 +20,7 @@ import {
 describe(__filename, () => {
   function renderMount({
     addon = { ...fakeAddon, slug: 'my-addon' },
+    errorHandler = createStubErrorHandler(),
     store = dispatchClientMetadata().store,
     ...props
   } = {}) {
@@ -28,30 +28,9 @@ describe(__filename, () => {
       <ReportAbuseButton
         addon={addon}
         debounce={(callback) => (...args) => callback(...args)}
-        i18n={getFakeI18nInst()}
-        store={store}
-        {...props}
-      />
-    );
-  }
-
-  // We use `mount` and the base version of this component for these tests
-  // because we need to check the state of the component and call methods
-  // directly. The only way to do that is to mount it directly without HOC.
-  function mountBaseComponent({
-    addon = { ...fakeAddon, slug: 'my-addon' },
-    errorHandler = createStubErrorHandler(),
-    store = dispatchClientMetadata().store,
-    ...props
-  } = {}) {
-    return mount(
-      <ReportAbuseButtonBase
-        addon={addon}
-        debounce={(callback) => (...args) => callback(...args)}
         errorHandler={errorHandler}
         i18n={getFakeI18nInst()}
         store={store}
-        {...mapStateToProps(store.getState(), { addon })}
         {...props}
       />
     );
@@ -120,22 +99,6 @@ describe(__filename, () => {
     expect(root.find('.ReportAbuseButton-send-report')).toHaveProp('disabled');
   });
 
-  it('enables the submit button if there is text in the textarea', () => {
-    const root = renderMount();
-
-    // Make sure it's disabled by default.
-    expect(root.find('.ReportAbuseButton-send-report').prop('disabled'))
-      .toEqual(true);
-
-    // This simulates entering text into the textarea.
-    const textarea = root.find('.ReportAbuseButton-textarea textarea');
-    textarea.node.value = 'add-on ate my homework!';
-    textarea.simulate('change');
-
-    expect(root.find('.ReportAbuseButton-send-report').prop('disabled'))
-      .toEqual(false);
-  });
-
   it('disables the submit button if text in the textarea is removed', () => {
     const root = renderMount();
 
@@ -200,9 +163,10 @@ describe(__filename, () => {
 
   it('dispatches when the send button is clicked if textarea has text', () => {
     const addon = { ...fakeAddon, slug: 'which-browser' };
-    const fakeDispatch = sinon.stub();
     const fakeEvent = createFakeEvent();
-    const root = mountBaseComponent({ addon, dispatch: fakeDispatch });
+    const { store } = dispatchClientMetadata();
+    const dispatchSpy = sinon.spy(store, 'dispatch');
+    const root = renderMount({ addon, store });
 
     // This simulates entering text into the textarea.
     const textarea = root.find('.ReportAbuseButton-textarea textarea');
@@ -210,12 +174,74 @@ describe(__filename, () => {
     textarea.simulate('change');
 
     root.find('.ReportAbuseButton-send-report').simulate('click', fakeEvent);
-    sinon.assert.calledWith(fakeDispatch, sendAddonAbuseReport({
+    sinon.assert.calledWith(dispatchSpy, sendAddonAbuseReport({
       addonSlug: addon.slug,
       errorHandlerId: 'create-stub-error-handler-id',
       message: 'Opera did it first!',
     }));
     sinon.assert.called(fakeEvent.preventDefault);
+  });
+
+  it('enables the submit button if there is text in the textarea', () => {
+    const addon = { ...fakeAddon, slug: 'which-browser' };
+    const { store } = dispatchClientMetadata();
+    const dispatchSpy = sinon.spy(store, 'dispatch');
+    const root = renderMount({ addon, store });
+
+    // Make sure it's disabled by default.
+    expect(root.find('.ReportAbuseButton-send-report').prop('disabled'))
+      .toEqual(true);
+
+    // This simulates entering text into the textarea.
+    const textarea = root.find('.ReportAbuseButton-textarea textarea');
+    textarea.node.value = 'Opera did it first!';
+    textarea.simulate('change');
+
+    sinon.assert.calledWith(dispatchSpy, enableAbuseButtonUI({ addon }));
+    expect(root.find('.ReportAbuseButton-send-report').prop('disabled'))
+      .toEqual(false);
+  });
+
+  it('does not dispatch enableAbuseButtonUI if button already enabled', () => {
+    const addon = { ...fakeAddon, slug: 'which-browser' };
+    const { store } = dispatchClientMetadata();
+    const dispatchSpy = sinon.spy(store, 'dispatch');
+    const root = renderMount({ addon, store });
+
+    // This simulates entering text into the textarea.
+    const textarea = root.find('.ReportAbuseButton-textarea textarea');
+    textarea.node.value = 'Opera did it first!';
+    textarea.simulate('change');
+
+    sinon.assert.calledWith(dispatchSpy, enableAbuseButtonUI({ addon }));
+
+    // Ensure `enableAbuseButtonUI()` isn't called again.
+    dispatchSpy.reset();
+
+    // This simulates entering text into the textarea.
+    textarea.node.value = 'Opera did it first! Adding some text!';
+    textarea.simulate('change');
+
+    sinon.assert.neverCalledWith(dispatchSpy, enableAbuseButtonUI({ addon }));
+  });
+
+  it('disables the submit button if there is no text in the textarea', () => {
+    const addon = { ...fakeAddon, slug: 'which-browser' };
+    const { store } = dispatchClientMetadata();
+    const dispatchSpy = sinon.spy(store, 'dispatch');
+    const root = renderMount({ addon, store });
+
+    // This simulates entering text into the textarea.
+    const textarea = root.find('.ReportAbuseButton-textarea textarea');
+    textarea.node.value = 'Opera did it first!';
+    textarea.simulate('change');
+
+    textarea.node.value = '';
+    textarea.simulate('change');
+
+    sinon.assert.calledWith(dispatchSpy, disableAbuseButtonUI({ addon }));
+    expect(root.find('.ReportAbuseButton-send-report').prop('disabled'))
+      .toEqual(true);
   });
 
   // This is a bit of a belt-and-braces approach, as the button that
@@ -224,12 +250,26 @@ describe(__filename, () => {
   // be called if the textarea is empty but this function manages to be
   // called.
   it('does not allow dispatch if there is no content in the textarea', () => {
-    const fakeDispatch = sinon.stub();
+    const addon = { ...fakeAddon, slug: 'this-should-not-happen' };
     const fakeEvent = createFakeEvent();
-    const root = mountBaseComponent({ dispatch: fakeDispatch });
+    const { store } = dispatchClientMetadata();
+    const dispatchSpy = sinon.spy(store, 'dispatch');
+    const root = renderMount({ addon, store });
 
-    root.instance().sendReport(fakeEvent);
-    sinon.assert.notCalled(fakeDispatch);
+    // We enable the button with an empty textarea; this never happens
+    // normally but we can force it here for testing.
+    store.dispatch(enableAbuseButtonUI({ addon }));
+    dispatchSpy.reset();
+    fakeEvent.preventDefault.reset();
+
+    // Make sure the button isn't disabled.
+    expect(root.find('.ReportAbuseButton-send-report').prop('disabled'))
+      .toEqual(false);
+    root.find('.ReportAbuseButton-send-report').simulate('click', fakeEvent);
+
+    sinon.assert.notCalled(dispatchSpy);
+    // Make sure preventDefault was called; we then know the sendReport()
+    // method was called.
     sinon.assert.called(fakeEvent.preventDefault);
   });
 });

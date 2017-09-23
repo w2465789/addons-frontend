@@ -1,4 +1,5 @@
 import classNames from 'classnames';
+import { oneLine } from 'common-tags';
 import defaultDebounce from 'lodash.debounce';
 import React from 'react';
 import { connect } from 'react-redux';
@@ -7,7 +8,14 @@ import { compose } from 'redux';
 
 import { withErrorHandler } from 'core/errorHandler';
 import translate from 'core/i18n/translate';
-import { sendAddonAbuseReport } from 'core/reducers/abuse';
+import log from 'core/logger';
+import {
+  disableAbuseButtonUI,
+  enableAbuseButtonUI,
+  hideAddonAbuseReportUI,
+  sendAddonAbuseReport,
+  showAddonAbuseReportUI,
+} from 'core/reducers/abuse';
 import { sanitizeHTML } from 'core/utils';
 import Button from 'ui/components/Button';
 
@@ -29,20 +37,16 @@ export class ReportAbuseButtonBase extends React.Component {
     debounce: defaultDebounce,
   };
 
-  constructor(props: Object) {
-    super(props);
-
-    this.state = { buttonEnabled: false, expanded: false };
-  }
-
   cancelReport = (event) => {
     event.preventDefault();
 
-    if (this.props.loading) {
+    const { addon, dispatch, loading } = this.props;
+
+    if (loading) {
       return;
     }
 
-    this.setState({ expanded: false });
+    dispatch(hideAddonAbuseReportUI({ addon }));
   }
 
   sendReport = (event) => {
@@ -51,6 +55,9 @@ export class ReportAbuseButtonBase extends React.Component {
     // The button isn't clickable if there is no content, but because we
     // debounce the checks we just verify there's a message to send.
     if (!this.textarea.value.length) {
+      log.debug(oneLine`User managed to click submit button before
+        disableAbuseButtonUI() was called because of debouncing textarea
+        onChange event. Ignoring this onClick event.`);
       return;
     }
 
@@ -66,16 +73,20 @@ export class ReportAbuseButtonBase extends React.Component {
   showMore = (event) => {
     event.preventDefault();
 
-    this.setState({ expanded: true }, function focusTextarea() {
-      this.textarea.focus();
-    });
+    const { addon, dispatch } = this.props;
+
+    dispatch(showAddonAbuseReportUI({ addon }));
+    this.textarea.focus();
   }
 
   textareaChange = this.props.debounce(() => {
-    if (this.textarea.value.length) {
-      this.setState({ buttonEnabled: true });
-    } else {
-      this.setState({ buttonEnabled: false });
+    const { abuseReport, addon, dispatch } = this.props;
+
+    // Don't dispatch the UI update if the button is already visible.
+    if (this.textarea.value.length && !abuseReport.buttonEnabled) {
+      dispatch(enableAbuseButtonUI({ addon }));
+    } else if (!this.textarea.value.length) {
+      dispatch(disableAbuseButtonUI({ addon }));
     }
   }, 100, { trailing: true })
 
@@ -88,7 +99,7 @@ export class ReportAbuseButtonBase extends React.Component {
       return null;
     }
 
-    if (abuseReport) {
+    if (abuseReport && abuseReport.message) {
       return (
         <div className="ReportAbuseButton ReportAbuseButton--report-sent">
           <h3 className="ReportAbuseButton-header">
@@ -112,7 +123,7 @@ export class ReportAbuseButtonBase extends React.Component {
       );
     }
 
-    const sendButtonIsDisabled = loading || !this.state.buttonEnabled;
+    const sendButtonIsDisabled = loading || !abuseReport.buttonEnabled;
 
     const prefaceText = i18n.sprintf(i18n.gettext(
       `If you think this add-on violates
@@ -128,7 +139,7 @@ export class ReportAbuseButtonBase extends React.Component {
     return (
       <div
         className={classNames('ReportAbuseButton', {
-          'ReportAbuseButton--is-expanded': this.state.expanded,
+          'ReportAbuseButton--is-expanded': abuseReport.uiVisible,
         })}
       >
         <div className="ReportAbuseButton--preview">
@@ -196,7 +207,8 @@ export const mapStateToProps = (state, ownProps) => {
   const addon = ownProps.addon;
 
   return {
-    abuseReport: addon ? state.abuse.bySlug[addon.slug] : null,
+    abuseReport: addon && state.abuse.bySlug[addon.slug] ?
+      state.abuse.bySlug[addon.slug] : {},
     loading: state.abuse.loading,
   };
 };
